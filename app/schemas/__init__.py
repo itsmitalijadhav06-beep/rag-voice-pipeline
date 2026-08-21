@@ -27,6 +27,23 @@ class TranscriptionResult(BaseModel):
     error: Optional[str] = Field(None, description="Error message if transcription failed")
 
 
+class DocumentRecord(BaseModel):
+    document_id: str = Field(..., description="Unique identifier for the document record")
+    text: str = Field(..., description="Raw text content of the document")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary")
+
+
+class ChunkRecord(BaseModel):
+    chunk_id: str = Field(..., description="Unique identifier for the chunk")
+    document_id: str = Field(..., description="Parent document identifier")
+    text: str = Field(..., description="Text content of the chunk")
+    strategy: str = Field(..., description="Chunking strategy used (fixed_overlap, sentence, passage_metadata)")
+    start_position: Optional[int] = Field(None, description="Start character offset in parent document")
+    end_position: Optional[int] = Field(None, description="End character offset in parent document")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Preserved metadata dictionary")
+
+
+
 
 class ContextChunk(BaseModel):
     chunk_id: str
