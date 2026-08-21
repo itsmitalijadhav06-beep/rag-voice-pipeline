@@ -1,26 +1,19 @@
 """
-Retrieval Package supporting vast chunking strategies (Fixed, Sentence, Metadata-aware) and Vector Index interfaces.
+Retrieval Package supporting vast chunking strategies (Fixed, Semantic, Metadata-aware) and Vector Index interfaces.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-from app.schemas import DocumentRecord, ChunkRecord, ContextChunk
+from typing import List, Dict, Any
+from app.schemas import ContextChunk
 
 
 class BaseChunker(ABC):
     """Abstract Base Class for Document Chunking Strategies."""
 
     @abstractmethod
-    def chunk(self, document: DocumentRecord) -> List[ChunkRecord]:
-        """Split a DocumentRecord into a list of ChunkRecord objects."""
+    def chunk(self, text: str, metadata: Dict[str, Any] = None) -> List[str]:
+        """Split text document into chunks based on specific strategy."""
         pass
-
-    def chunk_batch(self, documents: List[DocumentRecord]) -> List[ChunkRecord]:
-        """Convenience method to chunk a batch of DocumentRecords."""
-        all_chunks: List[ChunkRecord] = []
-        for doc in documents:
-            all_chunks.extend(self.chunk(doc))
-        return all_chunks
 
 
 class BaseVectorStore(ABC):
