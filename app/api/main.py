@@ -13,7 +13,7 @@ from app.core.logging import logger
 from app.core.exceptions import BaseRAGException, STTProcessingError
 from app.analytics import latency_tracker
 from app.stt import transcribe
-from app.retrieval.retrieve import retrieve_with_breakdown
+from app.retrieval.retrieve import retrieve_with_breakdown, resolve_query_language
 from app.generation import generate
 from app.schemas import (
     LatencyTelemetry,
@@ -86,6 +86,7 @@ async def query_pipeline(
     top_k: int = 5,
     stt_provider: Optional[str] = None,
     llm_provider: Optional[str] = None,
+    language: Optional[str] = None,
 ):
     """
     End-to-end Voice-Enabled RAG Query endpoint.
@@ -125,6 +126,10 @@ async def query_pipeline(
 
     query = stt_res.text.strip()
 
+    # Determine query routing language
+    language_signal = language or stt_res.language
+    resolved_lang = resolve_query_language(query, language_signal)
+
     # 3. Retrieval
     # Starts the sub-200ms target RAG path timer
     rag_start = time.perf_counter()
@@ -132,7 +137,8 @@ async def query_pipeline(
     retrieved_chunks, embedding_ms, retrieval_ms = retrieve_with_breakdown(
         query=query,
         top_k=top_k,
-        strategy=strategy
+        strategy=strategy,
+        language=resolved_lang
     )
 
     # 4. Generation + Guardrails (Reliability Harness)
@@ -164,6 +170,15 @@ async def query_pipeline(
     status = "SUCCESS"
     if gen_res.refusal:
         status = gen_res.refusal_reason or "REFUSED"
+    elif not gen_res.grounded:
+        status = "UNGROUNDED"
+
+    grounded = gen_res.grounded
+    # Enforce response consistency invariant:
+    if status in ("UNSAFE", "OFF_TOPIC", "INSUFFICIENT_CONTEXT", "UNGROUNDED", "REFUSED"):
+        grounded = False
+    elif grounded:
+        status = "SUCCESS"
 
     latency_breakdown = PipelineLatencyBreakdown(
         stt_ms=stt_ms,
@@ -177,9 +192,10 @@ async def query_pipeline(
 
     return VoiceQueryResponse(
         transcript=query,
+        resolved_language=resolved_lang,
         answer=gen_res.answer,
         status=status,
-        grounded=gen_res.grounded,
+        grounded=grounded,
         retrieved_chunks=context_chunks,
         latency=latency_breakdown
     )

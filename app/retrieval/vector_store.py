@@ -28,11 +28,15 @@ class FAISSVectorStore(BaseVectorStore):
     inner product == cosine similarity) plus a parallel list of ChunkRecord
     metadata keyed by row position."""
 
-    def __init__(self, strategy_name: str, dimension: int):
+    def __init__(self, strategy_name: str, dimension: int, language: Optional[str] = None):
         self.strategy_name = strategy_name
         self.dimension = dimension
+        self.language = language.lower() if language else None
         self._index = faiss.IndexFlatIP(dimension)
         self._chunks: List[ChunkRecord] = []
+        self.dataset = "MSMARCO-XI"
+        self.split = "validation"
+        self.limit = 500
 
     def build(self, chunks: List[ChunkRecord], embeddings: np.ndarray) -> None:
         if len(chunks) != embeddings.shape[0]:
@@ -72,7 +76,10 @@ class FAISSVectorStore(BaseVectorStore):
 
     def save(self, directory: Optional[Path] = None) -> Path:
         base_dir = directory or INDEX_DIR
-        strategy_dir = base_dir / self.strategy_name
+        if self.language:
+            strategy_dir = base_dir / self.language / self.strategy_name
+        else:
+            strategy_dir = base_dir / self.strategy_name
         strategy_dir.mkdir(parents=True, exist_ok=True)
 
         faiss.write_index(self._index, str(strategy_dir / "index.faiss"))
@@ -84,6 +91,10 @@ class FAISSVectorStore(BaseVectorStore):
                     "strategy_name": self.strategy_name,
                     "dimension": self.dimension,
                     "count": len(self._chunks),
+                    "language": self.language,
+                    "dataset": self.dataset,
+                    "split": self.split,
+                    "limit": self.limit,
                 },
                 f,
                 indent=2,
@@ -92,16 +103,28 @@ class FAISSVectorStore(BaseVectorStore):
         return strategy_dir
 
     @classmethod
-    def load(cls, strategy_name: str, directory: Optional[Path] = None) -> "FAISSVectorStore":
+    def load(cls, strategy_name: str, directory: Optional[Path] = None, language: Optional[str] = None) -> "FAISSVectorStore":
         base_dir = directory or INDEX_DIR
-        strategy_dir = base_dir / strategy_name
+        strategy_dir = base_dir / language / strategy_name if language else base_dir / strategy_name
 
-        # Check strategy subdirectory first
         meta_path = strategy_dir / "meta.json"
         faiss_path = strategy_dir / "index.faiss"
         chunks_path = strategy_dir / "chunks.pkl"
 
-        # Fallback to root index_dir if legacy file layout is present
+        # Fallback 1: If language is provided but directory is not found, fallback to legacy strategy_dir
+        if language and not meta_path.exists():
+            fallback_dir = base_dir / strategy_name
+            if (fallback_dir / "meta.json").exists():
+                logger.warning(
+                    f"Index for language '{language}' not found at {strategy_dir}. "
+                    f"Falling back to legacy layout at {fallback_dir}."
+                )
+                strategy_dir = fallback_dir
+                meta_path = strategy_dir / "meta.json"
+                faiss_path = strategy_dir / "index.faiss"
+                chunks_path = strategy_dir / "chunks.pkl"
+
+        # Fallback 2: Check legacy root index_dir if legacy file layout is present
         if not meta_path.exists():
             legacy_meta = base_dir / f"{strategy_name}.meta.json"
             if legacy_meta.exists():
@@ -110,16 +133,24 @@ class FAISSVectorStore(BaseVectorStore):
                 chunks_path = base_dir / f"{strategy_name}.chunks.pkl"
             else:
                 raise RetrievalError(
-                    f"No saved index found for strategy '{strategy_name}' in {strategy_dir} or {base_dir}."
+                    f"No saved index found for strategy '{strategy_name}' and language '{language}' in {strategy_dir} or {base_dir}."
                 )
 
         with open(meta_path, encoding="utf-8") as f:
             meta = json.load(f)
 
-        store = cls(strategy_name=strategy_name, dimension=meta["dimension"])
+        loaded_language = meta.get("language") or language
+        store = cls(strategy_name=strategy_name, dimension=meta["dimension"], language=loaded_language)
+        store.dataset = meta.get("dataset", "MSMARCO-XI")
+        store.split = meta.get("split", "validation")
+        store.limit = meta.get("limit", 500)
+
         store._index = faiss.read_index(str(faiss_path))
         with open(chunks_path, "rb") as f:
             store._chunks = pickle.load(f)
 
-        logger.info(f"[{strategy_name}] FAISS index loaded ({len(store._chunks)} chunks, dim={store.dimension}).")
+        logger.info(
+            f"[{strategy_name}] FAISS index loaded ({len(store._chunks)} chunks, "
+            f"dim={store.dimension}, lang={loaded_language})."
+        )
         return store

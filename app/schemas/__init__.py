@@ -84,6 +84,7 @@ class PipelineLatencyBreakdown(BaseModel):
 
 class VoiceQueryResponse(BaseModel):
     transcript: str
+    resolved_language: str
     answer: str
     status: str
     grounded: bool

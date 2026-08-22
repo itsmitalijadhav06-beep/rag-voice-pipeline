@@ -32,7 +32,13 @@ def build_all_indices(
 
     pipeline = RetrievalPipeline()
     print(f"Building FAISS indices for strategies: {strategies}...")
-    pipeline.build_index(documents, strategies=strategies)
+    pipeline.build_index(
+        documents,
+        strategies=strategies,
+        language=language,
+        split=split,
+        limit=limit
+    )
 
     print(f"\nSuccessfully built and saved indices:")
     for strat, store in pipeline.stores.items():

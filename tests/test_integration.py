@@ -188,7 +188,7 @@ def test_query_guardrail_refusal(mock_transcribe_success, mock_retrieve_success)
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "OFF_TOPIC"
-        assert data["grounded"] is True
+        assert data["grounded"] is False
         assert "outside the scope" in data["answer"]
         assert data["latency"]["guardrail_ms"] == 8.5
         assert data["latency"]["generation_ms"] == 0.0

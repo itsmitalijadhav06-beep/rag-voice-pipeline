@@ -48,7 +48,7 @@ async def test_irrelevant_context_refuses():
     gen = MockGenerator(scenario="irrelevant")
     result = await run_generation("What is the capital of France?", RELEVANT_CHUNKS, generator=gen)
     assert result.refusal is True
-    assert result.grounded is True  # refusals are policy-safe
+    assert result.grounded is False  # refusals are not grounded
 
 
 @pytest.mark.asyncio
