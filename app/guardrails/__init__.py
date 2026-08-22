@@ -2,22 +2,51 @@
 Guardrails Package handling input safety, off-topic detection, groundedness verification, and refusal logic.
 """
 
-from abc import ABC, abstractmethod
-from typing import List
-from app.schemas import GuardrailCheckResult, ContextChunk
+from typing import List, Optional
+
+from app.generation.config import GenerationConfig, get_generation_config
+from app.schemas import ContextChunk, GuardrailCheckResult
+from app.guardrails.grounding_guardrail import GroundingGuardrail
+from app.guardrails.input_guardrail import InputGuardrail
+
+__all__ = [
+    "InputGuardrail",
+    "GroundingGuardrail",
+    "run_input_guardrails",
+    "run_output_guardrails",
+]
 
 
-class BaseGuardrail(ABC):
-    """Abstract Base Class for Pipeline Guardrails."""
+def run_input_guardrails(
+    query: str,
+    chunks: List[ContextChunk],
+    cfg: Optional[GenerationConfig] = None,
+) -> GuardrailCheckResult:
+    """Run input + context-sufficiency checks. Returns the first failing result."""
+    cfg = cfg or get_generation_config()
+    input_guard = InputGuardrail(cfg)
+    result = input_guard.validate_input(query)
+    if not result.passed:
+        return result
+    return input_guard.check_context_sufficiency(chunks)
 
-    @abstractmethod
-    def validate_input(self, query: str) -> GuardrailCheckResult:
-        """Validate input query for safety and topic relevance."""
-        pass
 
-    @abstractmethod
-    def validate_output(
-        self, query: str, answer: str, context_chunks: List[ContextChunk]
-    ) -> GuardrailCheckResult:
-        """Validate output answer for groundedness and hallucination prevention."""
-        pass
+def run_output_guardrails(
+    query: str,
+    answer: str,
+    chunks: List[ContextChunk],
+    grounded: bool = True,
+    refusal: bool = False,
+    citations: Optional[List[str]] = None,
+    cfg: Optional[GenerationConfig] = None,
+) -> GuardrailCheckResult:
+    """Run grounding verification on a generated answer."""
+    cfg = cfg or get_generation_config()
+    return GroundingGuardrail(cfg).validate_output(
+        query=query,
+        answer=answer,
+        chunks=chunks,
+        grounded=grounded,
+        refusal=refusal,
+        citations=citations,
+    )

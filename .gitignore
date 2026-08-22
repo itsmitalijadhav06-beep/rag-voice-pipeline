@@ -47,3 +47,6 @@ data/index/*
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Kilo local tooling
+.kilo/
