@@ -133,3 +133,98 @@ The pipeline implements four distinct chunking strategies to satisfy vast chunki
   - **P100 (Max) Latency**: 12.75 ms
   - **Average Top-K Similarity Score**: 0.6476
 
+
+## End-to-End Pipeline (Phase 7)
+
+The Voice-Enabled RAG pipeline connects all modules into a unified flow:
+1. **Audio Input**: User uploads an audio file (`multipart/form-data`).
+2. **Audio Validation**: Basic format checks (extensions and size limits).
+3. **STT**: Uses the configured STT provider (e.g., Sarvam AI) to transcribe the audio into a query.
+4. **Retrieval**: Embeds the query and searches the FAISS index (using a chosen strategy like `fixed`, `sentence`, or `semantic`).
+5. **Generation & Guardrails**: Passes the transcript and retrieved chunks to the generation reliability harness, which executes:
+   - **Input Guardrails**: Safety pattern matching and retrieval context sufficiency check.
+   - **Synthesis**: Structured response generation with exponential backoff on transient errors.
+   - **Output Guardrails**: Groundedness and citation checks (retrying once if ungrounded, then refusing).
+6. **Structured Response**: Returns a JSON response with status, answer, grounded check, retrieved chunks, and stage-level latency telemetry.
+
+### API Specifications
+
+#### `GET /health`
+Verifies server health and active configurations.
+- **Response**:
+  ```json
+  {
+    "status": "healthy",
+    "environment": "development",
+    "stt_provider": "sarvam",
+    "llm_provider": "groq",
+    "vector_db_type": "faiss",
+    "sla_target_ms": 200.0
+  }
+  ```
+
+#### `POST /query`
+Performs end-to-end voice-to-answer processing.
+- **Request Format**: `multipart/form-data`
+  - `audio`: Audio file payload (WAV, MP3, etc., up to 25MB).
+  - `strategy`: (Optional query param) retrieval strategy (`fixed` | `sentence` | `semantic`, defaults to `fixed`).
+  - `top_k`: (Optional query param) number of context chunks to retrieve (defaults to 5).
+  - `stt_provider`: (Optional query param override) STT engine provider.
+  - `llm_provider`: (Optional query param override) LLM provider.
+- **Response Schema**:
+  ```json
+  {
+    "transcript": "What is a corporation?",
+    "answer": "A corporation is a legal entity created by law.",
+    "status": "SUCCESS",
+    "grounded": true,
+    "retrieved_chunks": [
+      {
+        "chunk_id": "chunk_1",
+        "text": "A corporation is a legal entity...",
+        "score": 0.95,
+        "strategy_used": "fixed",
+        "metadata": {
+          "document_id": "doc_1"
+        }
+      }
+    ],
+    "latency": {
+      "stt_ms": 120.0,
+      "embedding_ms": 15.5,
+      "retrieval_ms": 8.2,
+      "generation_ms": 250.0,
+      "guardrail_ms": 18.5,
+      "rag_pipeline_ms": 292.2,
+      "total_ms": 412.2
+    }
+  }
+  ```
+
+### Required Environment Variables
+
+Ensure `.env` contains:
+```env
+# Credentials
+SARVAM_API_KEY=your_sarvam_api_key_here
+LLM_API_KEY=your_groq_api_key_here
+
+# Providers
+STT_PROVIDER=sarvam
+LLM_PROVIDER=groq
+```
+
+### Local Startup
+
+Run the API:
+```bash
+python run.py
+```
+Access interactive API documentation at: `http://localhost:8000/docs`
+
+### Current Limitations
+- **STT Latency**: Speech-to-Text translation via remote HTTP calls introduces significant network round-trip overhead.
+- **Provider Dependencies**: The system relies on third-party APIs (Sarvam AI for transcription, Groq/OpenAI for LLM) which may be blocked, slow, or rate-limited.
+- **Offline Fallback**: If the real sentence-transformer model cannot be loaded, the system automatically falls back to an offline HashingEmbedder.
+
+

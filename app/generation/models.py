@@ -39,6 +39,10 @@ class GenerationResult(BaseModel):
     raw_response: Optional[str] = Field(
         None, description="Raw provider payload, kept for debugging only."
     )
+    guardrail_latency_ms: float = Field(
+        default=0.0,
+        description="Guardrail evaluation latency in milliseconds."
+    )
 
 
 class StructuredGenerationOutput(BaseModel):

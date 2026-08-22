@@ -10,6 +10,7 @@ between retrieval and generation.
 RetrievedChunk fields: chunk_id, document_id, text, score, metadata.
 """
 
+import time
 from typing import List, Optional
 
 from app.retrieval.pipeline import RetrievalPipeline
@@ -58,4 +59,29 @@ def retrieve_with_latency(query: str, top_k: int = 5, strategy: str = "fixed"):
         return [], 0.0
 
     pipeline = _get_pipeline()
-    return pipeline.retrieve(query, strategy=strategy, top_k=top_k)
+    return pipeline.retrieve(query, strategy=strategy, top_k=top_k)
+
+
+def retrieve_with_breakdown(
+    query: str, top_k: int = 5, strategy: str = "fixed"
+) -> tuple[List[RetrievedChunk], float, float]:
+    """Retrieve chunks and return separate embedding and retrieval search latencies."""
+    if top_k <= 0:
+        raise ValueError("top_k must be a positive integer > 0")
+    if not query or not query.strip():
+        return [], 0.0, 0.0
+
+    pipeline = _get_pipeline()
+    if strategy not in pipeline.stores:
+        pipeline.load_index(strategy)
+    store = pipeline.stores[strategy]
+
+    embed_start = time.perf_counter()
+    query_embedding = pipeline.embedder.embed([query])[0]
+    embedding_ms = (time.perf_counter() - embed_start) * 1000
+
+    search_start = time.perf_counter()
+    results = store.search(query_embedding, top_k=top_k)
+    retrieval_ms = (time.perf_counter() - search_start) * 1000
+
+    return results, embedding_ms, retrieval_ms

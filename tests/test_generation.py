@@ -95,6 +95,7 @@ async def test_structured_generation_result_has_expected_fields():
         "latency_ms",
         "token_usage",
         "raw_response",
+        "guardrail_latency_ms",
     }
 
 

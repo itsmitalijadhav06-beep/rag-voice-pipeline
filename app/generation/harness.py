@@ -51,11 +51,16 @@ async def run_generation(
     generator = generator or _default_generator(cfg)
 
     # 1. Input + context-sufficiency guardrails (no LLM call on rejection).
+    input_guard_start = time.perf_counter()
     input_check = run_input_guardrails(query, chunks, cfg)
+    input_guard_ms = (time.perf_counter() - input_guard_start) * 1000
+
     if not input_check.passed:
         state = _map_input_state(input_check)
         logger.info("Input guardrail rejected query: state=%s reason=%s", state, input_check.reason)
-        return build_refusal(state, reason=input_check.reason)
+        res = build_refusal(state, reason=input_check.reason)
+        res.guardrail_latency_ms = input_guard_ms
+        return res
 
     # 2. Generation with bounded exponential backoff.
     attempts = cfg.llm_max_retries + 1
@@ -76,9 +81,11 @@ async def run_generation(
             )
             if attempt == attempts - 1:
                 latency_tracker.record_latency((time.perf_counter() - start) * 1000)
-                return build_refusal(
+                res = build_refusal(
                     STATE_UNGROUNDED, reason="Generation failed after retries"
                 )
+                res.guardrail_latency_ms = input_guard_ms
+                return res
             await asyncio.sleep(min(delay, cfg.llm_backoff_max_s))
             delay *= 2
         except GenerationError as exc:
@@ -89,7 +96,9 @@ async def run_generation(
                 exc.message if hasattr(exc, "message") else exc,
             )
             latency_tracker.record_latency((time.perf_counter() - start) * 1000)
-            return build_refusal(STATE_UNGROUNDED, reason="Generation provider error")
+            res = build_refusal(STATE_UNGROUNDED, reason="Generation provider error")
+            res.guardrail_latency_ms = input_guard_ms
+            return res
 
     # 3. Output grounding verification.
     assert result is not None
@@ -98,13 +107,16 @@ async def run_generation(
     # so normalize it to grounded=True rather than propagating the model's grounded=False.
     if result.refusal:
         latency_tracker.record_latency((time.perf_counter() - start) * 1000)
-        return build_refusal(
+        res = build_refusal(
             state=result.refusal_reason or "refusal",
             reason=result.refusal_reason,
             model=result.model,
             answer=result.answer,
         )
+        res.guardrail_latency_ms = input_guard_ms
+        return res
 
+    output_guard_start = time.perf_counter()
     grounding = run_output_guardrails(
         query=query,
         answer=result.answer,
@@ -114,6 +126,9 @@ async def run_generation(
         citations=result.citations,
         cfg=cfg,
     )
+    output_guard_ms = (time.perf_counter() - output_guard_start) * 1000
+    total_guard_ms = input_guard_ms + output_guard_ms
+
     if not grounding.passed and not result.refusal:
         # One stricter re-generation attempt, then refuse if still ungrounded.
         logger.info("Grounding failed; retrying generation once.")
@@ -122,6 +137,7 @@ async def run_generation(
         except RetryableGenerationError:
             retry = None
         if retry is not None:
+            output_guard_retry_start = time.perf_counter()
             recheck = run_output_guardrails(
                 query=query,
                 answer=retry.answer,
@@ -131,14 +147,21 @@ async def run_generation(
                 citations=retry.citations,
                 cfg=cfg,
             )
+            retry_guard_ms = (time.perf_counter() - output_guard_retry_start) * 1000
+            total_guard_ms += retry_guard_ms
+
             if recheck.passed or retry.refusal:
                 latency_tracker.record_latency((time.perf_counter() - start) * 1000)
+                retry.guardrail_latency_ms = total_guard_ms
                 return retry
 
         latency_tracker.record_latency((time.perf_counter() - start) * 1000)
-        return build_refusal(STATE_UNGROUNDED, reason="Answer not grounded in context")
+        res = build_refusal(STATE_UNGROUNDED, reason="Answer not grounded in context")
+        res.guardrail_latency_ms = total_guard_ms
+        return res
 
     latency_tracker.record_latency((time.perf_counter() - start) * 1000)
+    result.guardrail_latency_ms = total_guard_ms
     return result
 
 
