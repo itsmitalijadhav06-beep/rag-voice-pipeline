@@ -70,30 +70,56 @@ class FAISSVectorStore(BaseVectorStore):
             )
         return results
 
-    def save(self, directory: Optional[Path] = None) -> None:
-        directory = directory or INDEX_DIR
-        directory.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(self._index, str(directory / f"{self.strategy_name}.faiss"))
-        with open(directory / f"{self.strategy_name}.chunks.pkl", "wb") as f:
+    def save(self, directory: Optional[Path] = None) -> Path:
+        base_dir = directory or INDEX_DIR
+        strategy_dir = base_dir / self.strategy_name
+        strategy_dir.mkdir(parents=True, exist_ok=True)
+
+        faiss.write_index(self._index, str(strategy_dir / "index.faiss"))
+        with open(strategy_dir / "chunks.pkl", "wb") as f:
             pickle.dump(self._chunks, f)
-        with open(directory / f"{self.strategy_name}.meta.json", "w") as f:
+        with open(strategy_dir / "meta.json", "w", encoding="utf-8") as f:
             json.dump(
-                {"strategy_name": self.strategy_name, "dimension": self.dimension, "count": len(self._chunks)},
+                {
+                    "strategy_name": self.strategy_name,
+                    "dimension": self.dimension,
+                    "count": len(self._chunks),
+                },
                 f,
                 indent=2,
             )
+        logger.info(f"[{self.strategy_name}] FAISS index saved to {strategy_dir}")
+        return strategy_dir
 
     @classmethod
     def load(cls, strategy_name: str, directory: Optional[Path] = None) -> "FAISSVectorStore":
-        directory = directory or INDEX_DIR
-        meta_path = directory / f"{strategy_name}.meta.json"
+        base_dir = directory or INDEX_DIR
+        strategy_dir = base_dir / strategy_name
+
+        # Check strategy subdirectory first
+        meta_path = strategy_dir / "meta.json"
+        faiss_path = strategy_dir / "index.faiss"
+        chunks_path = strategy_dir / "chunks.pkl"
+
+        # Fallback to root index_dir if legacy file layout is present
         if not meta_path.exists():
-            raise RetrievalError(f"No saved index found for strategy '{strategy_name}' in {directory}.")
-        with open(meta_path) as f:
+            legacy_meta = base_dir / f"{strategy_name}.meta.json"
+            if legacy_meta.exists():
+                meta_path = legacy_meta
+                faiss_path = base_dir / f"{strategy_name}.faiss"
+                chunks_path = base_dir / f"{strategy_name}.chunks.pkl"
+            else:
+                raise RetrievalError(
+                    f"No saved index found for strategy '{strategy_name}' in {strategy_dir} or {base_dir}."
+                )
+
+        with open(meta_path, encoding="utf-8") as f:
             meta = json.load(f)
 
         store = cls(strategy_name=strategy_name, dimension=meta["dimension"])
-        store._index = faiss.read_index(str(directory / f"{strategy_name}.faiss"))
-        with open(directory / f"{strategy_name}.chunks.pkl", "rb") as f:
+        store._index = faiss.read_index(str(faiss_path))
+        with open(chunks_path, "rb") as f:
             store._chunks = pickle.load(f)
-        return store
+
+        logger.info(f"[{strategy_name}] FAISS index loaded ({len(store._chunks)} chunks, dim={store.dimension}).")
+        return store

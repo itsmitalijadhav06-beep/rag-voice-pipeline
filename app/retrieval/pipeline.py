@@ -16,7 +16,7 @@ from app.retrieval.embedder import BaseEmbedder, get_embedder
 from app.retrieval.records import ChunkRecord, RetrievedChunk
 from app.retrieval.vector_store import FAISSVectorStore
 
-DEFAULT_STRATEGIES = ["fixed", "semantic", "metadata_aware"]
+DEFAULT_STRATEGIES = ["fixed", "sentence", "semantic"]
 
 
 class RetrievalPipeline:
@@ -33,7 +33,11 @@ class RetrievalPipeline:
         for strategy in strategies:
             all_chunks: List[ChunkRecord] = []
             for doc in documents:
-                all_chunks.extend(chunk_document(doc.document_id, doc.text, strategy=strategy))
+                meta = getattr(doc, "metadata", {})
+                all_chunks.extend(
+                    chunk_document(doc.document_id, doc.text, strategy=strategy, doc_metadata=meta)
+                )
+
 
             if not all_chunks:
                 logger.warning(f"[{strategy}] No chunks produced from corpus — skipping index.")

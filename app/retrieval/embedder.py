@@ -58,7 +58,10 @@ class SentenceTransformerEmbedder(BaseEmbedder):
 
     @property
     def dimension(self) -> int:
+        if hasattr(self._model, "get_embedding_dimension"):
+            return int(self._model.get_embedding_dimension())
         return int(self._model.get_sentence_embedding_dimension())
+
 
 
 class HashingEmbedder(BaseEmbedder):

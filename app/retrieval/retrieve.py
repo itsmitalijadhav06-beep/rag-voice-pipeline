@@ -27,28 +27,35 @@ def _get_pipeline() -> RetrievalPipeline:
     return _pipeline
 
 
-def retrieve(query: str, top_k: int = 5, strategy: str = "semantic") -> List[RetrievedChunk]:
+def retrieve(query: str, top_k: int = 5, strategy: str = "fixed") -> List[RetrievedChunk]:
     """Stable retrieval entry point.
 
     Args:
-        query: the user's question (already transcribed text, not audio).
-        top_k: how many chunks to return.
-        strategy: which chunking strategy's index to search
-                  ("fixed" | "semantic" | "metadata_aware"). Defaults to the
-                  strategy Phase 3D evaluation found best.
+        query: the user's question (transcribed text string).
+        top_k: how many chunks to return (default: 5).
+        strategy: which pre-built chunking strategy's index to search
+                  ("fixed" | "sentence" | "semantic"). Defaults to "fixed".
 
     Returns:
-        list[RetrievedChunk] — empty list if nothing relevant is found.
-        Raises RetrievalError (see app.core.exceptions) on hard failures
-        (e.g. no index built yet).
+        List[RetrievedChunk] — empty list if nothing relevant is found.
+        Raises RetrievalError (see app.core.exceptions) on hard failures.
     """
+    if top_k <= 0:
+        raise ValueError("top_k must be a positive integer > 0")
+    if not query or not query.strip():
+        return []
+
     pipeline = _get_pipeline()
     chunks, _latency_ms = pipeline.retrieve(query, strategy=strategy, top_k=top_k)
     return chunks
 
 
-def retrieve_with_latency(query: str, top_k: int = 5, strategy: str = "semantic"):
-    """Same as retrieve(), but also returns latency_ms — used by the
-    Phase 8 latency benchmark script instead of the plain contract function."""
+def retrieve_with_latency(query: str, top_k: int = 5, strategy: str = "fixed"):
+    """Same as retrieve(), but also returns latency_ms — used by benchmark scripts."""
+    if top_k <= 0:
+        raise ValueError("top_k must be a positive integer > 0")
+    if not query or not query.strip():
+        return [], 0.0
+
     pipeline = _get_pipeline()
-    return pipeline.retrieve(query, strategy=strategy, top_k=top_k)
+    return pipeline.retrieve(query, strategy=strategy, top_k=top_k)

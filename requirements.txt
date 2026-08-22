@@ -12,6 +12,8 @@ torch>=2.2.0
 sentence-transformers>=2.6.0
 faiss-cpu>=1.8.0
 datasets>=2.18.0
+huggingface-hub>=0.20.0
+
 
 # Audio Processing
 pydub>=0.25.1
