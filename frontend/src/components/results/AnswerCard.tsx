@@ -16,10 +16,22 @@ const variantConfig: Record<NonNullable<AnswerCardProps['variant']>, { badge: st
   };
 
 export function AnswerCard({ response, variant = 'grounded' }: AnswerCardProps) {
-  const cfg = variantConfig[variant];
-  const genMs = fmtMs(response.latency_breakdown_ms?.generation ?? response.rag_pipeline_latency_ms);
-  const totalMs = fmtMs(response.total_latency_ms);
-  const supportNote = variant === 'grounded' ? 'Answer supported by retrieved context' : reasonNote(response, variant);
+  const status = (response.status || '').toUpperCase();
+  const grounded = response.grounded ?? false;
+
+  let effectiveVariant = variant;
+  if (variant === 'grounded') {
+    if (status === 'UNSAFE') effectiveVariant = 'unsafe';
+    else if (!grounded || ['UNGROUNDED', 'INSUFFICIENT_CONTEXT', 'OFF_TOPIC', 'REFUSED', 'GENERATION_ERROR'].includes(status)) {
+      effectiveVariant = 'not-grounded';
+    }
+  }
+
+  const cfg = variantConfig[effectiveVariant];
+  const lat = response.latency;
+  const genMs = fmtMs(lat?.generation_ms ?? null);
+  const totalMs = fmtMs(lat?.total_ms ?? null);
+  const supportNote = effectiveVariant === 'grounded' ? 'Answer supported by retrieved context' : reasonNote(response, effectiveVariant);
 
   return (
     <div className="ai-response-glow active-glow panel-level-1 p-lg rounded flex flex-col gap-md border border-white/5">
@@ -54,12 +66,19 @@ export function AnswerCard({ response, variant = 'grounded' }: AnswerCardProps) 
 }
 
 function reasonNote(response: QueryResponse, variant: NonNullable<AnswerCardProps['variant']>): string {
-  const reason = response.guardrail_status?.reason;
-  if (reason) return reason;
+  const status = (response.status || '').toUpperCase();
   switch (variant) {
     case 'not-grounded':
+      if (status === 'INSUFFICIENT_CONTEXT') return 'Insufficient context to provide an answer';
+      if (status === 'UNGROUNDED') return 'Answer not supported by retrieved context';
+      if (status === 'OFF_TOPIC') return 'Query is outside the knowledge domain';
+      if (status === 'REFUSED') return 'Insufficient evidence to provide a grounded answer';
+      if (status === 'GENERATION_ERROR') return 'Generation failed';
       return 'Answer not supported by retrieved context';
     case 'refused':
+      if (status === 'INSUFFICIENT_CONTEXT') return 'Insufficient context to provide an answer';
+      if (status === 'OFF_TOPIC') return 'Query is outside the knowledge domain';
+      if (status === 'GENERATION_ERROR') return 'Generation failed';
       return 'Insufficient evidence to provide a grounded answer';
     case 'unsafe':
       return 'Request blocked by safety guardrails';

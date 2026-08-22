@@ -32,7 +32,7 @@ export function ResultsState({ response, sttLatencyMs, retrievalLatencyMs, onRes
     <div className="flex-1 flex flex-col pt-16 pb-10 md:pl-64 w-full">
       <div className="max-w-[1200px] mx-auto p-gutter lg:p-lg grid grid-cols-1 xl:grid-cols-12 gap-gutter">
         <div className="xl:col-span-8 flex flex-col gap-gutter">
-          <QueryTranscript transcript={response.query} sttLatencyMs={sttLatencyMs} />
+          <QueryTranscript transcript={response.transcript || ''} sttLatencyMs={sttLatencyMs} />
           <AnswerCard response={response} variant={response.grounded ? 'grounded' : 'not-grounded'} />
           <div className="panel-level-1 p-md rounded flex flex-col gap-md border border-white/5">
             <span className="font-mono-label text-mono-label text-outline uppercase tracking-wider">Processing Pipeline</span>

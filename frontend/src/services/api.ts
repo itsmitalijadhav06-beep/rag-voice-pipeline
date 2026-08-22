@@ -50,9 +50,17 @@ export async function checkQueryEndpoint(): Promise<boolean> {
   }
 }
 
-export async function submitVoiceQuery(audioFile: File): Promise<QueryResponse> {
+export async function submitVoiceQuery(
+  audioFile: File,
+  options?: { language?: string; strategy?: string; top_k?: number },
+): Promise<QueryResponse> {
   const form = new FormData();
   form.append('audio', audioFile);
+  if (options?.language) {
+    form.append('language', options.language);
+  }
+  form.append('strategy', options?.strategy ?? 'fixed');
+  form.append('top_k', String(options?.top_k ?? 5));
 
   let res: Response;
   try {

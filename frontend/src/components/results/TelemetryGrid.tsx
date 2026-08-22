@@ -1,7 +1,7 @@
 import { Icon } from '../ui/Icon';
 import { fmtMs } from '../../lib/utils';
 import { Surface } from '../ui/Surface';
-import type { QueryResponse } from '../../types';
+import type { QueryResponse, PipelineLatencyBreakdown } from '../../types';
 
 export interface TelemetryGridProps {
   response: QueryResponse;
@@ -23,13 +23,13 @@ const rows: RowDef[] = [
 ];
 
 export function TelemetryGrid({ response }: TelemetryGridProps) {
-  const breakdown = response.latency_breakdown_ms || {};
+  const lat = response.latency;
   return (
     <Surface className="p-md rounded flex flex-col gap-sm border border-white/5">
       <span className="font-mono-label text-mono-label text-outline uppercase tracking-wider">Telemetry</span>
       <div className="grid grid-cols-2 gap-xs font-mono-data text-mono-data text-on-surface-variant">
         {rows.map((r) => {
-          const value = valueForKey(r.key, response, breakdown);
+          const value = valueForKey(r.key, lat);
           const present = value != null && Number.isFinite(value);
           return (
             <div key={r.key} className="flex items-center justify-between gap-sm py-xs">
@@ -46,17 +46,18 @@ export function TelemetryGrid({ response }: TelemetryGridProps) {
       </div>
       <div className="flex items-center gap-xs pt-sm border-t border-white/5 font-mono-data text-mono-data">
         <Icon name="timer" size="xs" className="text-outline" />
-        <span className="text-outline">SLA {response.sla_met ? 'met' : 'not met'} • {fmtMs(response.total_latency_ms)} end-to-end</span>
+        <span className="text-outline">RAG Pipeline: {fmtMs(lat?.rag_pipeline_ms)} • Total: {fmtMs(lat?.total_ms)} end-to-end</span>
       </div>
     </Surface>
   );
 }
 
-function valueForKey(key: string, res: QueryResponse, breakdown: Record<string, number>): number | undefined {
-  if (key === 'stt') return res.stt_latency_ms ?? breakdown.stt;
-  if (key === 'retrieval') return breakdown.retrieval ?? breakdown.ret;
-  if (key === 'generation') return breakdown.generation ?? breakdown.gen;
-  if (key === 'guardrails') return breakdown.guardrails;
-  if (key === 'total') return res.total_latency_ms;
+function valueForKey(key: string, lat: PipelineLatencyBreakdown | undefined): number | undefined {
+  if (!lat) return undefined;
+  if (key === 'stt') return lat.stt_ms ?? undefined;
+  if (key === 'retrieval') return lat.retrieval_ms ?? undefined;
+  if (key === 'generation') return lat.generation_ms ?? undefined;
+  if (key === 'guardrails') return lat.guardrail_ms ?? undefined;
+  if (key === 'total') return lat.total_ms ?? undefined;
   return undefined;
 }
