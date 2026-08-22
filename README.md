@@ -96,5 +96,40 @@ STT latency (`latency_ms`) is measured strictly around the external provider API
   python scripts/test_stt.py [path/to/audio.wav]
   ```
 
-> [!NOTE]
-> The full RAG pipeline (retrieval, vector DB embeddings, LLM generation, and guardrails) is not implemented yet. Phase 2 delivers an isolated, provider-neutral STT module.
+## Retrieval Implementation (Phases 3A – 3D)
+
+### Primary Dataset (Phase 3A)
+- **Dataset**: `ai4bharat/MSMARCO-XI` (MS MARCO translated into 14 Indic languages).
+- **Controlled Subset Ingestion**: Supports streaming and local parquet subset loading via `--language` (e.g. `mr`, `hi`, `en`), `--split` (`train`, `validation`), and `--limit`.
+- **Normalization Layer**: Converts nested raw records (queries, answers, passage arrays, `is_selected` flags, query types) into normalized `DocumentRecord` structures (`document_id`, `text`, `metadata`).
+
+### Vast Chunking Strategies (Phase 3B)
+The pipeline implements four distinct chunking strategies to satisfy vast chunking requirements:
+1. **FixedSizeChunker**: Token/word windowing (default: 512 tokens, 50 token overlap). Validates `overlap < chunk_size`.
+2. **SentenceAwareChunker**: Sentence-boundary preserving chunker grouping complete sentences up to a target character budget without splitting mid-sentence. Supports Indic punctuation (`।`).
+3. **SemanticChunker**: Sentence segmentation + embedding similarity thresholding over adjacent sentence pairs to detect semantic topic shifts.
+4. **MetadataAwareChunker**: Metadata wrapper enriching chunks with document provenance and chunk positions.
+
+### Embeddings & FAISS Vector Indexing (Phase 3C)
+- **Embedding Model**: Configurable `sentence-transformers/all-MiniLM-L6-v2` (384-dim) with offline fallback.
+- **FAISS Storage**: Flat inner-product vector store (`IndexFlatIP`) persisted under strategy-specific directories:
+  ```
+  data/index/
+  ├── fixed/       (index.faiss, chunks.pkl, meta.json)
+  ├── sentence/    (index.faiss, chunks.pkl, meta.json)
+  └── semantic/    (index.faiss, chunks.pkl, meta.json)
+  ```
+
+### Stable Retrieval Contract & Benchmark (Phase 3D)
+- **Stable Entry Point**:
+  ```python
+  retrieve(query: str, top_k: int = 5, strategy: str = "fixed") -> list[RetrievedChunk]
+  ```
+- **Runtime Path**: Searches pre-built strategy indexes lazily without runtime index rebuilding.
+- **Measured Retrieval Benchmark**:
+  - **Total Test Queries**: 20
+  - **P50 (Median) Latency**: 5.85 ms
+  - **P70 Latency**: 6.07 ms
+  - **P100 (Max) Latency**: 12.75 ms
+  - **Average Top-K Similarity Score**: 0.6476
+
