@@ -31,11 +31,8 @@ ENV/
 .env.local
 
 # Data directory contents (keep structure via .gitkeep)
-data/raw/*
 !data/raw/.gitkeep
-data/processed/*
 !data/processed/.gitkeep
-data/index/*
 !data/index/.gitkeep
 
 # IDEs & Editors
@@ -50,3 +47,8 @@ htmlcov/
 
 # Kilo local tooling
 .kilo/
+
+# Legacy local retrieval indexes not used by deployment
+data/index/fixed/
+data/index/semantic/
+data/index/sentence/
