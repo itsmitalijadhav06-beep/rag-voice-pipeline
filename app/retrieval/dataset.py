@@ -38,11 +38,16 @@ def normalize_raw_row(row: dict, fallback_idx: int, language: str = "mr") -> Lis
     if query_id is None or (hasattr(query_id, "__len__") and len(query_id) == 0):
         query_id = fallback_idx
 
-    query = row.get("query") or row.get("Eng_Query") or ""
+    if language.lower() == "en":
+        query = row.get("Eng_Query") or row.get("query") or ""
+        answer = row.get("Eng_Answer") or row.get("Answer") or ""
+    else:
+        query = row.get("query") or row.get("Eng_Query") or ""
+        answer = row.get("Answer") or row.get("Eng_Answer") or ""
+
     if not isinstance(query, str):
         query = str(query)
 
-    answer = row.get("Answer") or row.get("Eng_Answer") or ""
     if not isinstance(answer, str):
         answer = str(answer)
 
@@ -64,9 +69,13 @@ def normalize_raw_row(row: dict, fallback_idx: int, language: str = "mr") -> Lis
 
     # Case 1: Passages is a dict containing Translated_passages / English_passages
     if isinstance(passages_obj, dict):
-        translated = passages_obj.get("Translated_passages")
-        if translated is None:
+        translated = None
+        if language.lower() == "en":
             translated = passages_obj.get("English_passages")
+        else:
+            translated = passages_obj.get("Translated_passages")
+            if translated is None:
+                translated = passages_obj.get("English_passages")
         translated_list = list(translated) if translated is not None else []
 
         selected = passages_obj.get("is_selected")
@@ -125,7 +134,10 @@ def load_msmarco_xi(
     language selection, split selection, and controlled subset limit.
     """
     effective_limit = limit if limit is not None else (max_rows or 1000)
-    lang_code = LANG_MAP.get(language.lower(), language.lower())
+    
+    # If English, load Hindi parquet as the container of original English passages
+    target_lang = "hi" if language.lower() == "en" else language
+    lang_code = LANG_MAP.get(target_lang.lower(), target_lang.lower())
     split_name = "train" if "train" in split.lower() else "validation"
     file_prefix = "train" if split_name == "train" else "val"
     parquet_filename = f"{split_name}/{lang_code}{file_prefix}.parquet"

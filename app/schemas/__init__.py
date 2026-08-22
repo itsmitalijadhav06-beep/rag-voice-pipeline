@@ -70,3 +70,23 @@ class LatencyTelemetry(BaseModel):
     p70_ms: float
     p100_ms: float
     sla_compliance_rate: float
+
+
+class PipelineLatencyBreakdown(BaseModel):
+    stt_ms: Optional[float] = None
+    embedding_ms: Optional[float] = None
+    retrieval_ms: Optional[float] = None
+    generation_ms: Optional[float] = None
+    guardrail_ms: Optional[float] = None
+    rag_pipeline_ms: Optional[float] = None
+    total_ms: Optional[float] = None
+
+
+class VoiceQueryResponse(BaseModel):
+    transcript: str
+    resolved_language: str
+    answer: str
+    status: str
+    grounded: bool
+    retrieved_chunks: List[ContextChunk]
+    latency: PipelineLatencyBreakdown

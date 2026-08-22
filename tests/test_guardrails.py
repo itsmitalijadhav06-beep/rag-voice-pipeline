@@ -102,6 +102,6 @@ def test_grounding_fail_unknown_citation():
 def test_refusal_builder_is_policy_safe():
     refusal = build_refusal("UNSAFE", reason="test")
     assert refusal.refusal is True
-    assert refusal.grounded is True
+    assert refusal.grounded is False
     assert refusal.citations == []
     assert refusal.refusal_reason == "UNSAFE"

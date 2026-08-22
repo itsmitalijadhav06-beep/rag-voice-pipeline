@@ -48,7 +48,7 @@ def build_refusal(
             message = f"{message} ({reason})"
     return GenerationResult(
         answer=message,
-        grounded=True,
+        grounded=False,
         citations=[],
         refusal=True,
         refusal_reason=state,

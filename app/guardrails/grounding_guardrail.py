@@ -46,7 +46,7 @@ class GroundingGuardrail:
         # A safe policy refusal is acceptable (not an ungrounded answer).
         if refusal:
             return GuardrailCheckResult(
-                passed=True, reason="Refusal is policy-safe", grounded=True
+                passed=True, reason="Refusal is policy-safe", grounded=False
             )
 
         if not grounded:
