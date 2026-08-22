@@ -1,0 +1,9 @@
+{
+  "strategy_name": "fixed",
+  "dimension": 384,
+  "count": 50,
+  "language": "en",
+  "dataset": "MSMARCO-XI",
+  "split": "validation",
+  "limit": 50
+}
