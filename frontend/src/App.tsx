@@ -60,9 +60,10 @@ export function App() {
   const handleQueryFile = useCallback(async (file: File) => {
     setPhase({ phase: 'processing', startedAt: Date.now() });
     try {
-      const res = await withMinDuration(submitVoiceQuery(file), 700);
+      const res = await withMinDuration(submitVoiceQuery(file, { strategy: 'fixed', top_k: 5 }), 700);
       const cls = classifyResponse(res);
       if (cls === 'unsafe') setPhase({ phase: 'unsafe', response: res });
+      else if (cls === 'error') setPhase({ phase: 'error', error: { message: res.answer || 'Generation failed.', code: 'GENERATION_ERROR', retryable: true } });
       else if (cls === 'refused') setPhase({ phase: 'refused', response: res });
       else setPhase({ phase: 'results', response: res });
     } catch (e) {

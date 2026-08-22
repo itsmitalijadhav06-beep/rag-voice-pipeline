@@ -11,31 +11,18 @@ export interface RefusalStateProps {
   onNewQuery: () => void;
 }
 
-const titles: Record<RefusalKind, string> = {
-  refused: 'Refused',
-  unsafe: 'Blocked',
-};
-const messages: Record<RefusalKind, string> = {
-  refused: 'Insufficient evidence to provide a grounded answer.',
-  unsafe: 'Request blocked by safety guardrails.',
-};
-const icons: Record<RefusalKind, string> = {
-  refused: 'search_off',
-  unsafe: 'block',
-};
-
 export function RefusalState({ response, kind, onReset, onNewQuery }: RefusalStateProps) {
-  const reason = response.guardrail_status?.reason;
-  const title = titles[kind];
-  const message = reason || messages[kind];
-  const iconName = icons[kind];
+  const status = (response.status || '').toUpperCase();
+  const title = status === 'UNSAFE' ? 'Blocked' : 'Refused';
+  const message = response.answer || (status === 'UNSAFE' ? 'Request blocked by safety guardrails.' : 'Insufficient evidence to provide a grounded answer.');
+  const iconName = status === 'UNSAFE' ? 'block' : 'search_off';
 
   return (
     <div className="flex-1 flex flex-col pt-16 pb-20 px-gutter bg-grid max-w-[1440px] mx-auto w-full min-h-screen">
       <header className="mb-lg">
         <div className="font-mono-label text-mono-label text-outline-variant mb-base uppercase">Intercepted Query</div>
         <h1 className="font-headline-md text-headline-md text-on-surface max-w-3xl border-l-2 border-surface-variant pl-sm">
-          {`"${response.query || ''}"`}
+          {`"${response.transcript || ''}"`}
         </h1>
       </header>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-lg relative z-10">

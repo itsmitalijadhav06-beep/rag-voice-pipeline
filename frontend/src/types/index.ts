@@ -45,24 +45,22 @@ export interface ContextChunk {
   metadata: Record<string, unknown>;
 }
 
-export interface GuardrailCheckResult {
-  passed: boolean;
-  reason?: string | null;
-  off_topic: boolean;
-  unsafe: boolean;
-  grounded: boolean;
-  refusal_triggered: boolean;
+export interface PipelineLatencyBreakdown {
+  stt_ms?: number | null;
+  embedding_ms?: number | null;
+  retrieval_ms?: number | null;
+  generation_ms?: number | null;
+  guardrail_ms?: number | null;
+  rag_pipeline_ms?: number | null;
+  total_ms?: number | null;
 }
 
 export interface QueryResponse {
-  query: string;
-  answer: string;
-  grounded: boolean;
-  retrieved_chunks: ContextChunk[];
-  guardrail_status: GuardrailCheckResult;
-  stt_latency_ms?: number | null;
-  rag_pipeline_latency_ms: number;
-  total_latency_ms: number;
-  latency_breakdown_ms: Record<string, number>;
-  sla_met: boolean;
+  transcript?: string;
+  resolved_language?: string;
+  answer?: string;
+  status?: string;
+  grounded?: boolean;
+  retrieved_chunks?: ContextChunk[];
+  latency?: PipelineLatencyBreakdown;
 }

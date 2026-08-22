@@ -43,12 +43,14 @@ export function LatencyView({ telemetry, slaTargetMs, response }: LatencyViewPro
   const compliance = formatPercent(telemetry?.sla_compliance_rate ?? 0);
   const sla = slaTargetMs != null ? `${Math.round(slaTargetMs)}ms` : '--';
 
-  const breakdown = response?.latency_breakdown_ms;
-  const stt = breakdown ? fmtMs(breakdown.stt ?? response.stt_latency_ms ?? null) : '--';
-  const retrieval = breakdown ? fmtMs(breakdown.retrieval ?? breakdown.ret ?? null) : '--';
-  const generation = breakdown ? fmtMs(breakdown.generation ?? breakdown.gen ?? null) : '--';
-  const guardrails = breakdown ? fmtMs(breakdown.guardrails) : '--';
-  const total = response ? fmtMs(response.total_latency_ms) : '--';
+  const breakdown = response?.latency;
+  const stt = breakdown ? fmtMs(breakdown.stt_ms) : '--';
+  const retrieval = breakdown ? fmtMs(breakdown.retrieval_ms) : '--';
+  const generation = breakdown ? fmtMs(breakdown.generation_ms) : '--';
+  const guardrails = breakdown ? fmtMs(breakdown.guardrail_ms) : '--';
+  const total = breakdown ? fmtMs(breakdown.total_ms) : '--';
+  const ragPipeline = breakdown ? fmtMs(breakdown.rag_pipeline_ms) : '--';
+  const embedding = breakdown ? fmtMs(breakdown.embedding_ms) : '--';
 
   return (
     <div className="flex-1 flex flex-col pt-16 pb-10 md:pl-64 w-full">
@@ -67,10 +69,12 @@ export function LatencyView({ telemetry, slaTargetMs, response }: LatencyViewPro
           <div className="panel-level-1 p-md rounded flex flex-col gap-sm border border-white/5">
             <span className="font-mono-label text-mono-label text-outline uppercase tracking-wider">Pipeline Breakdown</span>
             <BreakdownRow label="STT" value={stt} icon="mic" />
+            <BreakdownRow label="Embedding" value={embedding} icon="linear_scale" />
             <BreakdownRow label="Retrieval" value={retrieval} icon="database" />
             <BreakdownRow label="Generation" value={generation} icon="psychology" />
             <BreakdownRow label="Guardrails" value={guardrails} icon="shield_lock" />
             <div className="border-t border-white/5 pt-xs mt-xs">
+              <BreakdownRow label="RAG Pipeline" value={ragPipeline} icon="memory" />
               <BreakdownRow label="Total" value={total} icon="speed" />
             </div>
           </div>
