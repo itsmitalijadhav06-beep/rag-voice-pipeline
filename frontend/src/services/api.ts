@@ -1,6 +1,6 @@
 import type { QueryResponse, HealthStatus, LatencyTelemetry } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://rag-voice-pipeline-xs0x.onrender.com';
 
 export { BASE_URL };
 
