@@ -14,6 +14,7 @@ import time
 from typing import List, Optional
 
 from app.core.exceptions import RetrievalError
+from app.core.logging import logger
 from app.retrieval.pipeline import RetrievalPipeline, _get_store_key
 from app.retrieval.records import RetrievedChunk
 
@@ -142,18 +143,30 @@ def retrieve_with_breakdown(
         return [], 0.0, 0.0
 
     resolved_lang = resolve_query_language(query, language)
+    logger.info("[QUERY] retrieve_with_breakdown: resolved language=%s", resolved_lang)
+    
+    pipe_start = time.perf_counter()
     pipeline = _get_pipeline()
+    logger.info("[QUERY] retrieve_with_breakdown: pipeline fetched in %.2f ms", (time.perf_counter() - pipe_start) * 1000)
+    
     key = _get_store_key(strategy, resolved_lang)
     if key not in pipeline.stores:
+        logger.info("[QUERY] retrieve_with_breakdown: index '%s' not cached. Loading from disk.", key)
+        load_start = time.perf_counter()
         pipeline.load_index(strategy, resolved_lang)
+        logger.info("[QUERY] retrieve_with_breakdown: index '%s' loaded in %.2f ms", key, (time.perf_counter() - load_start) * 1000)
     store = pipeline.stores[key]
 
+    logger.info("[QUERY] retrieve_with_breakdown: query embedding start")
     embed_start = time.perf_counter()
     query_embedding = pipeline.embedder.embed([query])[0]
     embedding_ms = (time.perf_counter() - embed_start) * 1000
+    logger.info("[QUERY] retrieve_with_breakdown: query embedding complete (%.2f ms)", embedding_ms)
 
+    logger.info("[QUERY] retrieve_with_breakdown: FAISS search start")
     search_start = time.perf_counter()
     results = store.search(query_embedding, top_k=top_k)
     retrieval_ms = (time.perf_counter() - search_start) * 1000
+    logger.info("[QUERY] retrieve_with_breakdown: FAISS search complete (%.2f ms)", retrieval_ms)
 
     return results, embedding_ms, retrieval_ms

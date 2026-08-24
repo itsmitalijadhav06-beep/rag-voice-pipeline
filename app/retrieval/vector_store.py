@@ -54,9 +54,13 @@ class FAISSVectorStore(BaseVectorStore):
     def search(self, query_embedding, top_k: int = 5) -> List[RetrievedChunk]:
         if self._index.ntotal == 0:
             raise RetrievalError(f"FAISS index for strategy '{self.strategy_name}' is empty.")
+        import time
+        logger.info("[QUERY] FAISSVectorStore.search: query shape=%s, index ntotal=%d", np.asarray(query_embedding).shape, self._index.ntotal)
+        search_start = time.perf_counter()
         query = np.asarray(query_embedding, dtype="float32").reshape(1, -1)
         top_k = min(top_k, self._index.ntotal)
         scores, indices = self._index.search(query, top_k)
+        logger.info("[QUERY] FAISSVectorStore.search: search call complete in %.2f ms", (time.perf_counter() - search_start) * 1000)
 
         results: List[RetrievedChunk] = []
         for score, idx in zip(scores[0], indices[0]):
@@ -104,6 +108,9 @@ class FAISSVectorStore(BaseVectorStore):
 
     @classmethod
     def load(cls, strategy_name: str, directory: Optional[Path] = None, language: Optional[str] = None) -> "FAISSVectorStore":
+        import time
+        logger.info("[QUERY] FAISSVectorStore.load: loading index for strategy=%s, language=%s", strategy_name, language)
+        load_start = time.perf_counter()
         base_dir = directory or INDEX_DIR
         strategy_dir = base_dir / language / strategy_name if language else base_dir / strategy_name
 
@@ -151,6 +158,6 @@ class FAISSVectorStore(BaseVectorStore):
 
         logger.info(
             f"[{strategy_name}] FAISS index loaded ({len(store._chunks)} chunks, "
-            f"dim={store.dimension}, lang={loaded_language})."
+            f"dim={store.dimension}, lang={loaded_language}) in {(time.perf_counter() - load_start) * 1000:.2f} ms."
         )
         return store

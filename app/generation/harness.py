@@ -52,8 +52,10 @@ async def run_generation(
 
     # 1. Input + context-sufficiency guardrails (no LLM call on rejection).
     input_guard_start = time.perf_counter()
+    logger.info("[QUERY] run_generation: input guardrails start")
     input_check = run_input_guardrails(query, chunks, cfg)
     input_guard_ms = (time.perf_counter() - input_guard_start) * 1000
+    logger.info("[QUERY] run_generation: input guardrails complete (%.2f ms, passed=%s)", input_guard_ms, input_check.passed)
 
     if not input_check.passed:
         state = _map_input_state(input_check)
@@ -70,14 +72,18 @@ async def run_generation(
 
     for attempt in range(attempts):
         try:
+            logger.info("[QUERY] run_generation: LLM generate attempt %d/%d start", attempt + 1, attempts)
+            attempt_start = time.perf_counter()
             result = await generator.generate(query, chunks)
+            logger.info("[QUERY] run_generation: LLM generate attempt %d/%d complete (%.2f ms)", attempt + 1, attempts, (time.perf_counter() - attempt_start) * 1000)
             break
         except RetryableGenerationError as exc:
             logger.warning(
-                "Generation attempt %d/%d failed (retryable): %s",
+                "Generation attempt %d/%d failed (retryable): %s (took %.2f ms)",
                 attempt + 1,
                 attempts,
                 exc.message if hasattr(exc, "message") else exc,
+                (time.perf_counter() - attempt_start) * 1000
             )
             if attempt == attempts - 1:
                 latency_tracker.record_latency((time.perf_counter() - start) * 1000)

@@ -75,7 +75,9 @@ class RetrievalPipeline:
 
     def load_index(self, strategy: str, language: Optional[str] = None) -> None:
         key = _get_store_key(strategy, language)
+        logger.info("[QUERY] pipeline.load_index: loading vector store for strategy=%s, language=%s", strategy, language)
         self.stores[key] = FAISSVectorStore.load(strategy, language=language)
+        logger.info("[QUERY] pipeline.load_index: successfully loaded store for strategy=%s, language=%s (cached as key='%s')", strategy, language, key)
 
     def retrieve(self, query: str, strategy: str = "semantic", top_k: int = 5, language: Optional[str] = None):
         """Returns (chunks: list[RetrievedChunk], latency_ms: float)."""

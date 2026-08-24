@@ -2,7 +2,16 @@
 FastAPI Main Web Application for Voice-Enabled RAG Pipeline.
 """
 
+import os
+# Limit CPU thread usage to 1 to prevent resource contention hangs on Render/container instances
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import time
+from contextlib import asynccontextmanager
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,10 +31,25 @@ from app.schemas import (
     PipelineLatencyBreakdown,
 )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Eagerly loading retrieval pipeline, embedding model, and default indexes on startup...")
+    start = time.perf_counter()
+    from app.retrieval.retrieve import _get_pipeline
+    pipeline = _get_pipeline()
+    try:
+        pipeline.load_index("fixed", "en")
+        pipeline.load_index("fixed", "hi")
+    except Exception as e:
+        logger.warning("Failed to eagerly load default indexes during startup: %s", e)
+    logger.info("Retrieval pipeline, embedding model, and default indexes loaded successfully in %.2f ms", (time.perf_counter() - start) * 1000)
+    yield
+
 app = FastAPI(
     title="Voice-Enabled RAG Pipeline API",
     description="Hacker House Goa 2026 Shortlisting Task 2 — Voice RAG API with Sub-200ms Target",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -129,14 +153,18 @@ async def query_pipeline(
         raise HTTPException(status_code=400, detail="Transcribed text is empty. Please speak clearly.")
 
     query = stt_res.text.strip()
+    logger.info("[QUERY] STT complete. transcript='%s'", query)
 
     # Determine query routing language
+    lang_start = time.perf_counter()
     language_signal = language or stt_res.language
     resolved_lang = resolve_query_language(query, language_signal)
+    logger.info("[QUERY] language resolved: %s in %.2f ms", resolved_lang, (time.perf_counter() - lang_start) * 1000)
 
     # 3. Retrieval
     # Starts the sub-200ms target RAG path timer
     rag_start = time.perf_counter()
+    logger.info("[QUERY] retrieval start: strategy='%s', resolved_lang='%s'", strategy, resolved_lang)
 
     retrieved_chunks, embedding_ms, retrieval_ms = retrieve_with_breakdown(
         query=query,
@@ -144,19 +172,23 @@ async def query_pipeline(
         strategy=strategy,
         language=resolved_lang
     )
+    logger.info("[QUERY] retrieval complete: retrieved %d chunks (embedding: %.2f ms, retrieval search: %.2f ms)", len(retrieved_chunks), embedding_ms, retrieval_ms)
 
     # 4. Generation + Guardrails (Reliability Harness)
+    logger.info("[QUERY] generation start")
     gen_res = await generate(
         query=query,
         chunks=retrieved_chunks,
         provider=llm_provider or settings.LLM_PROVIDER
     )
+    logger.info("[QUERY] generation + guardrails complete: model=%s, refusal=%s, grounded=%s", gen_res.model, gen_res.refusal, gen_res.grounded)
 
     # Compute RAG processing path latency
     rag_pipeline_ms = (time.perf_counter() - rag_start) * 1000
 
     # Calculate overall total latency
     total_ms = (time.perf_counter() - overall_start) * 1000
+    logger.info("[QUERY] total pipeline duration: %.2f ms (RAG path: %.2f ms)", total_ms, rag_pipeline_ms)
 
     # Map the retrieved chunks to the schema ContextChunk for response
     context_chunks = [
